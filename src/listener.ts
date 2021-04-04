@@ -16,11 +16,15 @@ stan.on("connect", () => {
     process.exit();
   });
 
-  const options = stan.subscriptionOptions().setManualAckMode(true);
+  const options = stan
+    .subscriptionOptions()
+    .setManualAckMode(true)
+    .setDeliverAllAvailable(); // Get a list of all events ever emitted
+
   const subscription = stan.subscribe(
     "ticket:created",
     // Avoid sending the same message to duplicated services by placing them in the same queue group
-    "order-service-queue-group",
+    // "order-service-queue-group",
     options
   );
 
