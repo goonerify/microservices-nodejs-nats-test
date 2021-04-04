@@ -19,6 +19,7 @@ stan.on("connect", () => {
   const options = stan.subscriptionOptions().setManualAckMode(true);
   const subscription = stan.subscribe(
     "ticket:created",
+    // Avoid sending the same message to duplicated services by placing them in the same queue group
     "order-service-queue-group",
     options
   );
