@@ -16,30 +16,7 @@ stan.on("connect", () => {
     process.exit();
   });
 
-  const options = stan
-    .subscriptionOptions()
-    .setManualAckMode(true)
-    // Get a list of all events ever emitted. This will only be used the first time a service goes online if we also set durable name
-    .setDeliverAllAvailable()
-    // Ensure that our services only receive events that they haven't processed already
-    .setDurableName("accounting-service"); // Durable name is usually the same as queue group name
-
-  const subscription = stan.subscribe(
-    "ticket:created",
-    // Avoid sending the same message to duplicated services by placing them in the same queue group
-    "order-service-queue-group", // Also ensures that durable name persists a disconnection to the NATS server
-    options
-  );
-
-  subscription.on("message", (msg: Message) => {
-    const data = msg.getData();
-
-    if (typeof data === "string") {
-      console.log(`Received event #${msg.getSequence()}, with data: ${data}`);
-    }
-
-    msg.ack();
-  });
+  new TicketCreatedListener(stan).listen();
 });
 
 // Watch for interrupt / terminate signals and close our channel
@@ -60,18 +37,23 @@ abstract class Listener {
   }
 
   subscriptionOptions() {
-    return this.client
-      .subscriptionOptions()
-      .setDeliverAllAvailable()
-      .setManualAckMode(true)
-      .setAckWait(this.ackWait)
-      .setDurableName(this.queueGroupName);
+    return (
+      this.client
+        .subscriptionOptions()
+        // Get a list of all events ever emitted. This will only be used the first time a service goes online if we also set durable name
+        .setDeliverAllAvailable()
+        .setManualAckMode(true)
+        .setAckWait(this.ackWait)
+        // Ensure that our services only receive events that they haven't processed already
+        .setDurableName(this.queueGroupName)
+    ); // Durable name is usually the same as queue group name
   }
 
   listen() {
     const subscription = this.client.subscribe(
       this.subject,
-      this.queueGroupName,
+      // Avoid sending the same message to duplicated services by placing them in the same queue group
+      this.queueGroupName, // Also ensures that durable name persists a disconnection to the NATS server
       this.subscriptionOptions()
     );
 
@@ -88,5 +70,16 @@ abstract class Listener {
     return typeof data === "string"
       ? JSON.parse(data)
       : JSON.parse(data.toString("utf8")); // parsing a buffer. Not expected to be used
+  }
+}
+
+class TicketCreatedListener extends Listener {
+  subject = "ticket:created";
+  queueGroupName = "payments-service";
+
+  onMessage(data: any, msg: Message) {
+    console.log("Event data!", data);
+
+    msg.ack();
   }
 }
